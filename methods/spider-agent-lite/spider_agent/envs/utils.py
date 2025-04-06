@@ -9,7 +9,7 @@ import json
 import xml.etree.ElementTree as ET
 import yaml
 import platform
-
+import threading
 
 TIMEOUT_DURATION = 25
 
@@ -38,20 +38,25 @@ class timeout:
     def __init__(self, seconds=TIMEOUT_DURATION, error_message="Timeout"):
         self.seconds = seconds
         self.error_message = error_message
+        self.timer = None
 
     def handle_timeout(self, signum, frame):
         raise TimeoutError(self.error_message)
 
+    def _timeout(self):
+        raise TimeoutError(self.error_message)
+
     def __enter__(self):
         if platform.system() == "Windows":
-            raise NotImplementedError("Timeout not supported on Windows")
+            self.timer = threading.Timer(self.seconds, self._timeout)
+            self.timer.start()
         else:
             signal.signal(signal.SIGALRM, self.handle_timeout)
             signal.alarm(self.seconds)
 
     def __exit__(self, type, value, traceback):
-        if platform.system() == "Windows":
-            raise NotImplementedError("Timeout not supported on Windows")
+        if platform.system() == "Windows" and self.timer:
+            self.timer.cancel()
         else:
             signal.alarm(0)
 
