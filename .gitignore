@@ -22,6 +22,12 @@ methods/spider-agent/examples/*
 !methods/spider-agent/logs/README.md
 !methods/spider-agent/output/README.md
 
+methods/spider-agent-lite/logs/*
+methods/spider-agent-lite/output/*
+methods/spider-agent-lite/examples/*
+!methods/spider-agent-lite/logs/README.md
+!methods/spider-agent-lite/output/README.md
+
 methods/spider-agent-snow/logs/*
 methods/spider-agent-snow/output/*
 methods/spider-agent-snow/examples/*
