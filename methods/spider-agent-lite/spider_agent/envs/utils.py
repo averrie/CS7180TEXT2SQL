@@ -43,12 +43,9 @@ class timeout:
     def handle_timeout(self, signum, frame):
         raise TimeoutError(self.error_message)
 
-    def _timeout(self):
-        raise TimeoutError(self.error_message)
-
     def __enter__(self):
         if platform.system() == "Windows":
-            self.timer = threading.Timer(self.seconds, self._timeout)
+            self.timer = threading.Timer(self.seconds, self.handle_timeout)
             self.timer.start()
         else:
             signal.signal(signal.SIGALRM, self.handle_timeout)

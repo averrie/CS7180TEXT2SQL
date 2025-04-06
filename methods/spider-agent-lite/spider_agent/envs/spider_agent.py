@@ -39,7 +39,7 @@ Getter = Callable[[gym.Env, Dict[str, Any]], Any]
 
 # constants
 START_UP_DELAY = 2  # start up delay for docker container
-DEFAULT_TIME_OUT = 10000  # default waiting time for each action
+DEFAULT_TIME_OUT = 200  # default waiting time for each action
 MAX_OBS_LENGTH = 40000
 EMPTY_DATA_PATH = "spider_agent/data/empty"  # an empty data directory
 DEFAULT_IMAGE_DIR = "spider_agent/images"  # default directory to store docker images
