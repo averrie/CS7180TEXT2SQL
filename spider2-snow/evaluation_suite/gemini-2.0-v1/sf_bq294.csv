@@ -1,0 +1,6 @@
+trip_id,duration_sec,start_date,start_station_name,end_station_name,bike_number,subscriber_type,member_birth_year,current_age,age_classification,member_gender,route
+201711181216331214,86252,1511007393000000,Downtown Berkeley BART,Telegraph Ave at Alcatraz Ave,1214,Customer,1993,31,Adult,Female,Downtown Berkeley BART to Telegraph Ave at Alcatraz Ave
+201804301607133191,86142,1525104433000000,Golden Gate Ave at Polk St,San Francisco Caltrain Station 2  (Townsend St at 4th St),3191,Subscriber,1974,50,Adult,Male,Golden Gate Ave at Polk St to San Francisco Caltrain Station 2  (Townsend St at 4th St)
+201708261619002509,86135,1503764340000000,Broadway at Kearny,Broadway at Battery St,2509,Customer,1990,34,Adult,Female,Broadway at Kearny to Broadway at Battery St
+2017083011593475,86075,1504094374000000,Howard St at 8th St,19th St at Mission St,75,Subscriber,1984,40,Adult,Female,Howard St at 8th St to 19th St at Mission St
+201712091603082143,85975,1512835388000000,The Embarcadero at Sansome St,Union Square (Powell St at Post St),2143,Customer,1991,33,Adult,Male,The Embarcadero at Sansome St to Union Square (Powell St at Post St)

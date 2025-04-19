@@ -1,0 +1,2 @@
+output
+"Could not complete the task due to persistent 'invalid identifier' errors when using the FLATTEN function, even with simplified queries. It is suspected that there may be an issue with the Snowflake environment or data structure that cannot be diagnosed with the available tools."

@@ -1,0 +1,6 @@
+trip_id,duration_sec,START_DATE,start_station_name,ROUTE,bike_number,subscriber_type,member_birth_year,AGE,AGE_CLASSIFICATION,member_gender,REGION_NAME
+201709191735093065,85191,2017-09-19 17:35:09,Clay St at Battery St,Clay St at Battery St - Mississippi St at 17th St,3065,Subscriber,1982,43,Adult (40-60 Y.O),Male,Berkeley
+20170711130737267,73067,2017-07-11 13:07:37,Clay St at Battery St,Clay St at Battery St - Townsend St at 7th St,267,Subscriber,1981,44,Adult (40-60 Y.O),Male,Berkeley
+201709151659432553,72931,2017-09-15 16:59:43,Powell St BART Station (Market St at 4th St),Powell St BART Station (Market St at 4th St) - Jackson Playground,2553,Customer,1976,49,Adult (40-60 Y.O),Male,San Francisco
+201711101731372797,69762,2017-11-10 17:31:37,The Embarcadero at Steuart St,The Embarcadero at Steuart St - The Embarcadero at Steuart St,2797,Customer,1990,35,Young (<40 Y.O),Male,8D
+201709182012242608,69666,2017-09-18 20:12:24,Powell St BART Station (Market St at 5th St),Powell St BART Station (Market St at 5th St) - 24th St at Chattanooga St,2608,Customer,1995,30,Young (<40 Y.O),Male,San Jose

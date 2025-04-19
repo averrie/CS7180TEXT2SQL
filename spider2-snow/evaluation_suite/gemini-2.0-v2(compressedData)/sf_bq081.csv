@@ -1,0 +1,7 @@
+REGION_NAME,trip_id,duration_sec,START_TIME,start_station_name,member_gender
+San Francisco,201712312359011603,386,2017-12-31 23:59:01,San Salvador St at 9th St,Male
+San Jose,201712312359011603,386,2017-12-31 23:59:01,San Salvador St at 9th St,Male
+Oakland,201712312359011603,386,2017-12-31 23:59:01,San Salvador St at 9th St,Male
+Emeryville,201712312359011603,386,2017-12-31 23:59:01,San Salvador St at 9th St,Male
+Berkeley,201712312359011603,386,2017-12-31 23:59:01,San Salvador St at 9th St,Male
+8D,201712312359011603,386,2017-12-31 23:59:01,San Salvador St at 9th St,Male

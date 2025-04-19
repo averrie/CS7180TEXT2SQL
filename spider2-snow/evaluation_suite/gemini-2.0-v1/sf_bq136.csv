@@ -1,0 +1,2 @@
+output
+"Unable to complete the task due to persistent ""Object does not exist"" errors, despite verifying the database, schema, table, and column names against the provided DDL.csv file. It is suspected that there may be an issue with the Snowflake environment or user permissions."

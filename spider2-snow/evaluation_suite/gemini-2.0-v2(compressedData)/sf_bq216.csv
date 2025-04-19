@@ -1,0 +1,2 @@
+output
+"The script failed because the Snowflake credentials were not provided. The expected output file is top_5_similar_patents.csv, but it was not generated."
