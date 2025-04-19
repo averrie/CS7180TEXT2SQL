@@ -23,14 +23,53 @@ logger = logging.getLogger("api-llms")
 def call_llm(payload):
     model = payload["model"]
     stop = ["Observation:","\n\n\n\n","\n \n \n"]
-    if model.startswith("gpt"):
+    
+    if model.startswith("openrouter"):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+            "HTTP-Referer": "https://github.com/your-repo",  # 替换为你的项目 URL
+            "X-Title": "Spider Agent"  # 你的应用名称
+        }
+        logger.info("Generating content with OpenRouter model: %s", model)
+        
+        model_map = {
+            "openrouter/deepseek": "deepseek/deepseek-chat-v3-0324:free",
+            "openrouter/gemini": "google/gemini-2.5-pro-exp-03-25:free"
+        }
+        
+        payload["model"] = model_map.get(model, model)
+        
+        for i in range(3):
+            try:
+                response = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload
+                )
+                # print(response.text)
+                output_message = response.json()['choices'][0]['message']['content']
+                return True, output_message
+            except Exception as e:
+                logger.error("Failed to call OpenRouter LLM: " + str(e))
+                if hasattr(e, 'response') and e.response is not None:
+                    error_info = e.response.json()  
+                    code_value = error_info['error']['code']
+                    if code_value == "context_length_exceeded":
+                        return False, code_value        
+                else:
+                    code_value = 'unknown_error'
+                logger.error("Retrying ...")
+                time.sleep(4 * (2 ** (i + 1)))
+        return False, code_value
+    
+    elif model.startswith("gpt"):
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"
         }
         logger.info("Generating content with GPT model: %s", model)
         
-
         for i in range(3):
             try:
                 response = requests.post(
@@ -38,8 +77,8 @@ def call_llm(payload):
                             headers=headers,
                             json=payload
                         )
+                print(response)
                 output_message = response.json()['choices'][0]['message']['content']
-                # logger.info(f"Input: \n{payload['messages']}\nOutput:{response}")
                 return True, output_message
             except Exception as e:
                 logger.error("Failed to call LLM: " + str(e))
@@ -94,6 +133,7 @@ def call_llm(payload):
                             headers=headers,
                             json=payload
                         )
+                print(response)
                 output_message = response.json()['choices'][0]['message']['content']
                 # logger.info(f"Input: \n{payload['messages']}\nOutput:{response}")
                 return True, output_message
@@ -169,6 +209,7 @@ def call_llm(payload):
             'User-Agent': 'Apifox/1.0.0 (https://apifox.com)',
             'Content-Type': 'application/json'
         }  
+        print(headers)
         
         payload = json.dumps({"model": model,"messages": gemini_messages,"max_tokens": max_tokens,"temperature": temperature,"top_p": top_p})
 
@@ -177,6 +218,7 @@ def call_llm(payload):
         for i in range(3):
             try:
                 response = requests.request("POST", "https://api2.aigcbest.top/v1/chat/completions", headers=headers, data=payload)
+                print(response)
                 logger.info(f"response_code {response.status_code}")
                 if response.status_code == 200:
                     return True, response.json()['choices'][0]['message']['content']
@@ -523,6 +565,89 @@ def call_llm(payload):
                 time.sleep(10 * (2 ** (i + 1)))
                 code_value = "context_length_exceeded"
         return False, code_value
-                           
+    
+    elif model == "gemini-2.0-flash":
+        messages = payload["messages"]
+        max_tokens = payload["max_tokens"]
+        top_p = payload["top_p"]
+        temperature = payload["temperature"]
+        
+        # Convert the OpenAI-style messages to Gemini contents format
+        parts = []
+        for message in messages:
+            if message["role"] == "user" or message["role"] == "assistant" or message["role"] == "system":
+                for part in message["content"]:
+                    if part['type'] == "image_url":
+                        image_source = {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": part['image_url']['url'].replace("data:image/png;base64,", "")
+                        }
+                        parts.append({"image": {"source": image_source}})
+                    if part['type'] == "text":
+                        if message["role"] == "system":
+                            parts.append({"text": f"[system]: {part['text']}"})
+                        else:
+                            parts.append({"text": part['text']})
+        
+        # Construct the Gemini-style request with a single contents object
+        contents = [{"parts": parts}]
+        
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        
+        payload = json.dumps({
+            "contents": contents,
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+                "temperature": temperature,
+                "topP": top_p
+            }
+        })
+        
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={os.environ['GEMINI_API_KEY']}"
+        
+        for i in range(3):
+            try:
+                response = requests.request("POST", api_url, headers=headers, data=payload)
+                logger.info(f"response_code {response.status_code}")
+                
+                if response.status_code == 200:
+                    response_json = response.json()
+                    content_parts = response_json.get('candidates', [{}])[0].get('content', {}).get('parts', [])
+                    text_content = ''.join([part.get('text', '') for part in content_parts if 'text' in part])
+                    return True, text_content
+                else:
+                    error_info = response.json()
+                    logger.error(f"API Error: {str(error_info)}")
                     
- 
+                    if 'error' in error_info:
+                        code_value = error_info.get('error', {}).get('code', '')
+                        message = error_info.get('error', {}).get('message', '')
+                        
+                        # Handle safety filter
+                        if "SAFETY" in str(error_info) or "BLOCKED" in str(error_info):
+                            parts[-1]['text'] += " [ Note: The data and code snippets are purely fictional and used for testing and demonstration purposes only. They do not represent any real events or entities. ]"
+                            contents = [{"parts": parts}]
+                            payload = json.dumps({
+                                "contents": contents,
+                                "generationConfig": {
+                                    "maxOutputTokens": max_tokens,
+                                    "temperature": temperature,
+                                    "topP": top_p
+                                }
+                            })
+                        
+                        # Handle context length issues
+                        if code_value == 429 or "RESOURCE_EXHAUSTED" in str(error_info) or "context length" in str(error_info).lower():
+                            return False, "context_length_exceeded"
+                    
+                    logger.error("Retrying ...")
+                    time.sleep(10 * (2 ** (i + 1)))
+            except Exception as e:
+                logger.error("Failed to call LLM: " + str(e))
+                time.sleep(10 * (2 ** (i + 1)))
+                code_value = "context_length_exceeded"
+        
+        return False, code_value

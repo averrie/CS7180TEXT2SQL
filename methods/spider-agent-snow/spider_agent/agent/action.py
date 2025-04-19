@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional, Any, Union, List, Dict
 from abc import ABC
+from .sql_error_analyzer import  SnowflakeErrorAnalysis
 
 def remove_quote(text: str) -> str:
     """ 
@@ -238,6 +239,7 @@ class SNOWFLAKE_EXEC_SQL(Action):
     sql_query: str = field(metadata={"help": 'SQL query to execute'})
     is_save: bool = field(metadata={"help": 'whether to save result to CSV'})
     save_path: str = field(default=None, metadata={"help": 'path where the output CSV file is saved if is_save is True'})
+    error_analysis: Optional[SnowflakeErrorAnalysis] = field(default=None, metadata={"help": 'analysis of any error that occurred'})
 
     @classmethod
     def get_action_description(cls) -> str:
@@ -247,23 +249,19 @@ class SNOWFLAKE_EXEC_SQL(Action):
 * Description: Executes a SQL query on Snowflake. If `is_save` is True, the results are saved to a specified CSV file; otherwise, results are printed.
 If you estimate that the number of returned rows is small, you can set is_save=False, to directly view the results. If you estimate that the number of returned rows is large, be sure to set is_save = True.
 The `save_path` CSV must be under the `/workspace` directory.
+
+If an error occurs, the action will automatically analyze the error and provide:
+- Error type classification
+- Root cause analysis
+- Specific fix suggestions
+- Prevention tips
+- A revised query if applicable
+- Recommendation for using CTEs if beneficial
+
 * Examples:
   - Example1: SNOWFLAKE_EXEC_SQL(sql_query="SELECT count(*) FROM sales", is_save=False)
   - Example2: SNOWFLAKE_EXEC_SQL(sql_query="SELECT user_id, sum(purchases) FROM transactions GROUP BY user_id", is_save=True, save_path="/workspace/result.csv")
 """
-
-    # @classmethod
-    # def parse_action_from_text(cls, text: str) -> Optional['SNOWFLAKE_EXEC_SQL']:
-    #     pattern = r'SNOWFLAKE_EXEC_SQL\(sql_query=(?P<quote>\"\"\"|\"|\'|\"\"|\'\')(.*?)(?P=quote), is_save=(True|False)(, save_path=(?P<quote2>\"|\'|\"\"|\'\')(.*?)(?P=quote2))?\)'
-        
-    #     match = re.search(pattern, text, flags=re.DOTALL)
-    #     if match:
-    #         sql_query = match.group(2).strip()  # Capturing the SQL query part
-    #         is_save = match.group(3).strip().lower() == 'true'  # Determining is_save
-    #         save_path = match.group(6) if match.group(6) else ""  # Optional save_path handling
-            
-    #         return cls(sql_query=sql_query, is_save=is_save, save_path=save_path)
-    #     return None
 
     @classmethod
     def parse_action_from_text(cls, text: str) -> Optional['SNOWFLAKE_EXEC_SQL']:
@@ -282,30 +280,26 @@ The `save_path` CSV must be under the `/workspace` directory.
                 )?
                 \s*\)
         '''
-        # Use re.VERBOSE to allow multiline and commented pattern
         match = re.search(pattern, text, flags=re.DOTALL | re.VERBOSE)
         if match:
-            # Extracting sql_query
             sql_query_raw = match.group('sql_query')
             sql_query = sql_query_raw.replace(r'\"', '"').replace(r"\'", "'").replace('\\\\', '\\')
-
-            # Extracting is_save
+            
             is_save_str = match.group('is_save')
             is_save = is_save_str.strip().lower() == 'true'
-
-            # Extracting save_path if present
+            
             save_path = ""
             if match.group('save_path'):
                 save_path_raw = match.group('save_path')
                 save_path = save_path_raw.replace(r'\"', '"').replace(r"\'", "'").replace('\\\\', '\\')
-
+            
             return cls(sql_query=sql_query, is_save=is_save, save_path=save_path)
         return None
 
-
     def __repr__(self) -> str:
         save_info = f', save_path="{self.save_path}"' if self.is_save else ""
-        return f'SNOWFLAKE_EXEC_SQL(sql_query="{self.sql_query}", is_save={self.is_save}{save_info})'
+        error_info = f'\nError Analysis:\n{self.error_analysis}' if self.error_analysis else ""
+        return f'SNOWFLAKE_EXEC_SQL(sql_query="{self.sql_query}", is_save={self.is_save}{save_info}){error_info}'
 
 
     
@@ -457,3 +451,92 @@ class Terminate(Action):
         return None
     
 
+@dataclass
+class SNOWFLAKE_EXEC_CTE(Action):
+    action_type: str = field(default="execute_snowflake_CTE", init=False, repr=False, metadata={"help": 'type of action, c.f., "exec_sf_cte"'})
+    cte_query: str = field(metadata={"help": 'CTE query to execute'})
+    is_save: bool = field(metadata={"help": 'whether to save result to CSV'})
+    save_path: str = field(default=None, metadata={"help": 'path where the output CSV file is saved if is_save is True'})
+    step: str = field(default="full", metadata={"help": 'execution step: "full", "parse", "validate", or specific CTE name'})
+    validation_result: Optional[Dict[str, Any]] = field(default=None, metadata={"help": 'validation results from previous CTE executions'})
+
+    @classmethod
+    def get_action_description(cls) -> str:
+        return """
+## SNOWFLAKE_EXEC_CTE Action
+* Signature: SNOWFLAKE_EXEC_CTE(cte_query="WITH cte_name AS (SELECT ...) SELECT * FROM cte_name", is_save=True, save_path="/workspace/output_file.csv", step="full", validation_result=None)
+* Description: Executes a Common Table Expression (CTE) query on Snowflake with step-by-step validation.
+  - step="full": Execute the complete CTE query
+  - step="parse": Parse the CTE query into individual CTEs
+  - step="validate": Validate individual CTEs
+  - step="cte_name": Execute a specific CTE
+* The query must start with WITH clause. If `is_save` is True, the results are saved to a specified CSV file.
+* Examples:
+  - Example1: SNOWFLAKE_EXEC_CTE(cte_query="WITH sales_summary AS (SELECT product_id, SUM(quantity) as total_quantity FROM sales GROUP BY product_id) SELECT * FROM sales_summary", is_save=False)
+  - Example2: SNOWFLAKE_EXEC_CTE(cte_query="WITH daily_sales AS (SELECT date, SUM(amount) as daily_total FROM transactions GROUP BY date), running_totals AS (SELECT date, daily_total, SUM(daily_total) OVER (ORDER BY date) as running_total FROM daily_sales) SELECT * FROM running_totals", is_save=True, save_path="/workspace/result.csv", step="validate")
+  - Example3: SNOWFLAKE_EXEC_CTE(cte_query="WITH daily_sales AS (SELECT date, SUM(amount) as daily_total FROM transactions GROUP BY date) SELECT * FROM daily_sales", step="daily_sales")
+"""
+
+    @classmethod
+    def parse_action_from_text(cls, text: str) -> Optional['SNOWFLAKE_EXEC_CTE']:
+        pattern = r'''
+            SNOWFLAKE_EXEC_CTE\(
+                \s*cte_query\s*=\s*
+                (?P<quote_sql>\"\"\"|\"|\'\'\'|\'|\"\"\")  # Match opening quote for cte_query
+                (?P<cte_query>.*?)
+                (?<!\\)(?P=quote_sql)                      # Match closing quote for cte_query
+                ,\s*is_save\s*=\s*
+                (?P<is_save>True|False)
+                (?:,\s*save_path\s*=\s*
+                    (?P<quote_path>\"\"\"|\"|\'\'\'|\'|\"\"\")  # Match opening quote for save_path
+                    (?P<save_path>.*?)
+                    (?<!\\)(?P=quote_path)                     # Match closing quote for save_path
+                )?
+                (?:,\s*step\s*=\s*
+                    (?P<quote_step>\"\"\"|\"|\'\'\'|\'|\"\"\")  # Match opening quote for step
+                    (?P<step>.*?)
+                    (?<!\\)(?P=quote_step)                     # Match closing quote for step
+                )?
+                (?:,\s*validation_result\s*=\s*
+                    (?P<validation_result>.*?)
+                )?
+                \s*\)
+        '''
+        match = re.search(pattern, text, flags=re.DOTALL | re.VERBOSE)
+        if match:
+            cte_query_raw = match.group('cte_query')
+            cte_query = cte_query_raw.replace(r'\"', '"').replace(r"\'", "'").replace('\\\\', '\\')
+            
+            is_save_str = match.group('is_save')
+            is_save = is_save_str.strip().lower() == 'true'
+            
+            save_path = ""
+            if match.group('save_path'):
+                save_path_raw = match.group('save_path')
+                save_path = save_path_raw.replace(r'\"', '"').replace(r"\'", "'").replace('\\\\', '\\')
+            
+            step = "full"
+            if match.group('step'):
+                step_raw = match.group('step')
+                step = step_raw.replace(r'\"', '"').replace(r"\'", "'").replace('\\\\', '\\')
+            
+            validation_result = None
+            if match.group('validation_result'):
+                try:
+                    validation_result = eval(match.group('validation_result'))
+                except:
+                    validation_result = None
+            
+            return cls(cte_query=cte_query, is_save=is_save, save_path=save_path, step=step, validation_result=validation_result)
+        return None
+
+    def __repr__(self) -> str:
+        save_info = f', save_path="{self.save_path}"' if self.is_save else ""
+        step_info = f', step="{self.step}"' if self.step != "full" else ""
+        validation_info = f', validation_result={self.validation_result}' if self.validation_result else ""
+        return f'SNOWFLAKE_EXEC_CTE(cte_query="{self.cte_query}", is_save={self.is_save}{save_info}{step_info}{validation_info})'
+
+
+    
+    
+    

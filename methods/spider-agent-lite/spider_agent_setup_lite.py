@@ -103,6 +103,7 @@ def add_agent_setting():
             os.makedirs(example_path)
         external_knowledge = example['external_knowledge']
         if external_knowledge != None:
+            print(external_knowledge + "123")
             shutil.copy(os.path.join(DOCUMENT_PATH, external_knowledge), example_path)
 
 

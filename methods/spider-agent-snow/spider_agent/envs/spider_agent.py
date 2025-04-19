@@ -16,8 +16,10 @@ from spider_agent.controllers.setup import SetupController
 from spider_agent.envs.utils import *
 from spider_agent import configs
 from spider_agent.agent.action import Action, Bash, Terminate, CreateFile, EditFile, LOCAL_DB_SQL, BIGQUERY_EXEC_SQL, BQ_GET_TABLES, BQ_GET_TABLE_INFO, BQ_SAMPLE_ROWS, SNOWFLAKE_EXEC_SQL
+from spider_agent.agent.sql_error_analyzer import SnowflakeErrorAnalyzer
 import signal
 import sys
+from spider_agent.agent.prompts import SNOWFLAKE_ERROR_ANALYSIS
 
 logger = logging.getLogger("spider_agent.env")
 
@@ -86,7 +88,8 @@ class Spider_Agent_Env(gym.Env):
         signal.signal(signal.SIGINT, self._cleanup)
         signal.signal(signal.SIGTERM, self._cleanup)
         
-        
+        self.sql_error_analyzer = SnowflakeErrorAnalyzer(self.controller)
+        self.last_error_analysis = None
         
     def _set_task_info(self, task_config: Dict[str, Any]):
         self.task_id: str = task_config['instance_id']
@@ -200,7 +203,7 @@ class Spider_Agent_Env(gym.Env):
         return {"added_files": added_files_list, "changed_files": changed_files_list}
 
     
-    def step(self, action: Action):
+    def step(self, action: Action) -> Tuple[str, bool]:
         try:
             with timeout(DEFAULT_TIME_OUT,"Action execution time exceeded!"):
                 done = False
@@ -215,7 +218,12 @@ class Spider_Agent_Env(gym.Env):
                 elif isinstance(action, BIGQUERY_EXEC_SQL):
                     observation = self.controller.execute_bq_exec_sql_query(action)
                 elif isinstance(action, SNOWFLAKE_EXEC_SQL):
-                    observation = self.controller.execute_sf_exec_sql_query(action)
+                    try:
+                        observation = self.controller.execute_sf_exec_sql_query(action)
+                    except Exception as e:
+                        # Analyze SQL error
+                        error_analysis = self._analyze_sql_error(action.sql_query, e)
+                        observation = f"SQL Error:\n{str(e)}\n\nError Analysis:\n{error_analysis}"
                 elif isinstance(action, LOCAL_DB_SQL):
                     observation = self.execute_sql_action(action)
                 elif isinstance(action, CreateFile):
@@ -231,7 +239,6 @@ class Spider_Agent_Env(gym.Env):
             observation = str(e)
         
         observation = self._handle_observation(observation)
-        # logger.info("Observation: %s", observation)
         return observation, done
     
     def _handle_observation(self, observation):
@@ -291,4 +298,116 @@ class Spider_Agent_Env(gym.Env):
             obs = f"SQL command executed successfully. No output."
         
         return obs
+    
+    async def _handle_sql_error(self, action: SNOWFLAKE_EXEC_SQL, error: Exception) -> str:
+        """Handle SQL execution errors by analyzing them and providing suggestions."""
+        try:
+            # Get current schema information
+            schema_info = self._get_current_schema_info()
+            
+            # Analyze the error
+            analysis = await self.sql_error_analyzer.analyze_error(
+                query=action.sql_query,
+                error_message=str(error),
+                schema_info=schema_info
+            )
+            
+            # Store the analysis in the action for reference
+            action.error_analysis = analysis
+            
+            # Return formatted error summary
+            return self.sql_error_analyzer.get_error_summary(analysis)
+            
+        except Exception as e:
+            return f"Error during SQL analysis: {str(e)}\nOriginal error: {str(error)}"
+
+    async def execute_sql(self, action: SNOWFLAKE_EXEC_SQL) -> Tuple[str, bool]:
+        """Execute SQL query with error analysis."""
+        try:
+            result = await self.controller.execute_sf_exec_sql_query(action)
+            if action.is_save and action.save_path:
+                # Save results to CSV if requested
+                self.save_results_to_csv(result, action.save_path)
+                return f"Results saved to {action.save_path}", True
+            return str(result), True
+        except Exception as e:
+            # Handle SQL error with analysis
+            error_analysis = await self._handle_sql_error(action, e)
+            return error_analysis, False
+
+    def _get_current_schema_info(self) -> Dict[str, Any]:
+        """Get current schema information for error analysis."""
+        try:
+            schema_info = {
+                'tables': []
+            }
+            
+            # Get all tables in the current database
+            tables = self.controller.get_tables()
+            
+            for table in tables:
+                table_info = {
+                    'name': table,
+                    'columns': []
+                }
+                
+                # Get column information for each table
+                columns = self.controller.get_columns(table)
+                for col in columns:
+                    table_info['columns'].append({
+                        'name': col['name'],
+                        'type': col['type']
+                    })
+                
+                schema_info['tables'].append(table_info)
+                
+            return schema_info
+        except Exception as e:
+            # Return empty schema info if there's an error
+            return {'tables': []}
+
+    def _analyze_sql_error(self, query: str, error: Exception) -> str:
+        """Analyze SQL error and provide guidance."""
+        try:
+            # Get schema context
+            schema_context = self._get_schema_context()
+            
+            # Prepare prompt for error analysis
+            prompt = SNOWFLAKE_ERROR_ANALYSIS.format(
+                query=query,
+                error_message=str(error),
+                schema_context=schema_context
+            )
+            
+            # Get analysis from LLM
+            analysis = self.controller.get_completion(prompt)
+            print(f"Error analysis: "+analysis)
+            self.last_error_analysis = analysis
+            
+            return analysis
+            
+        except Exception as e:
+            return f"Error during SQL analysis: {str(e)}\nOriginal error: {str(error)}"
+            
+    def _get_schema_context(self) -> str:
+        """Get current schema information for error analysis."""
+        try:
+            schema_info = []
+            
+            # Get tables from the current database
+            tables = self.controller.get_tables()
+            
+            for table in tables:
+                table_info = f"Table: {table}\nColumns:\n"
+                
+                # Get column information
+                columns = self.controller.get_columns(table)
+                for col in columns:
+                    table_info += f"  - {col['name']} ({col['type']})\n"
+                    
+                schema_info.append(table_info)
+                
+            return "\n".join(schema_info)
+        except Exception as e:
+            return "Schema information not available"
     

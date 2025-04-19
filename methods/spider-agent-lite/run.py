@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import random
+from re import I
 import sys
 import glob
 
@@ -11,6 +12,7 @@ from tqdm import tqdm
 
 from spider_agent.envs.spider_agent import Spider_Agent_Env
 from spider_agent.agent.agents import PromptAgent
+from spider_agent.mcp import MCPCoordinator
 
 
 #  Logger Configs {{{ #
@@ -77,6 +79,7 @@ def config() -> argparse.Namespace:
     parser.add_argument("--local_only", action="store_true")
     parser.add_argument("--dbt_only", action="store_true")
     parser.add_argument("--sf_only", action="store_true")
+    parser.add_argument("--use_mcp", action="store_true", help="Whether to use MCP")
     
     
     args = parser.parse_args()
@@ -111,16 +114,19 @@ def test(
             "work_dir": "/workspace",
         }
     }
+    if args.use_mcp:
+        agent = MCPCoordinator(model=args.model,max_tokens=args.max_tokens,temperature=args.temperature)
+    else:
     
-    agent = PromptAgent(
-        model=args.model,
-        max_tokens=args.max_tokens,
-        top_p=args.top_p,
-        temperature=args.temperature,
-        max_memory_length=args.max_memory_length,
-        max_steps=args.max_steps,
-        use_plan=args.plan
-    )
+        agent = PromptAgent(
+            model=args.model,
+            max_tokens=args.max_tokens,
+            top_p=args.top_p,
+            temperature=args.temperature,
+            max_memory_length=args.max_memory_length,
+            max_steps=args.max_steps,
+            use_plan=args.plan
+        )
     valid_ids = []
     ## load task configs
     assert os.path.exists(args.test_path) and args.test_path.endswith(".jsonl"), f"Invalid test_path, must be a valid jsonl file: {args.test_path}"

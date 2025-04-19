@@ -16,6 +16,7 @@ from spider_agent.agent.models import call_llm
 
 from openai import AzureOpenAI
 from typing import Dict, List, Optional, Tuple, Any, TypedDict
+from .snowflake_error_analyzer import SnowflakeErrorAnalyzer
 
 
 
@@ -88,7 +89,7 @@ class PromptAgent:
     def predict(self, obs: Dict=None) -> List:
         """
         Predict the next action(s) based on the current observation.
-        """    
+        """ 
         
         assert len(self.observations) == len(self.actions) and len(self.actions) == len(self.thoughts) \
             , "The number of observations and actions should be the same."
